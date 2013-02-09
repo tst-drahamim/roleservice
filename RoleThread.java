@@ -8,6 +8,7 @@ import	java.io.UnsupportedEncodingException;
 
 import	java.util.Set;
 import	java.util.Map;
+import	java.util.HashMap;
 import	java.util.Iterator;
 
 import	java.net.Socket;
@@ -87,15 +88,19 @@ RoleThread
 	
 	private void
 	process(
-		BufferedReader	browserIn,		// input from browser
-		OutputStream	browserStream)	// output to browser
-		throws			IOException
+		BufferedReader			browserIn,		// input from browser
+		OutputStream			browserStream)	// output to browser
+		throws					IOException
 	{
-		String			line;
-		String[]		tokens;
-		String			get        = null;
-		boolean			post       = false;
-		PrintWriter		browserOut = getStreamWriter(browserStream);
+		int						contentLength = 0;
+		String					line;
+		String					path          = null;
+		boolean					get           = false;
+		boolean					post          = false;
+		String[]				tokens;
+		String[]				queries;
+		PrintWriter				browserOut    = getStreamWriter(browserStream);
+		HashMap<String, String>	params        = new HashMap<String, String>();
 
 		// read request, a line at a time
 
@@ -112,7 +117,9 @@ RoleThread
 			// when we find the GET line, keep arguments and print out
 
 			if (tokens[0].equals("GET")) {
-				get = tokens[1];
+				path = tokens[1];
+				get  = true;
+
 				if (debug) {
 					System.err.println(line);
 				}
@@ -121,19 +128,58 @@ RoleThread
 			// when we find a POST line, print it out too
 
 			if (tokens[0].equals("POST")) {
+				path = tokens[1];
 				post = true;
+
 				if (debug) {
 					System.err.println(line);
 				}
 			}
+
+			if (tokens[0].equals("Content-Length:")) {
+				contentLength = Integer.parseInt(tokens[1]);
+			}
 		}
 
-		if ((get == null) && !post) {
+		if (!(get || post)) {
 			System.err.println("no GET or POST line found");
 			return;
 		}
 
-		String	roleString = getRole();
+		if (debug) {
+			System.err.println("path: " + path);
+		}
+
+		if (get) {
+			queries = path.split("\\?");
+
+			if (queries.length == 2) {
+				getParams(params, queries[1]);
+			}
+		} else {
+			int				ch;
+			StringBuilder	content = (contentLength == 0) ?
+								new StringBuilder() :
+								new StringBuilder(contentLength);
+
+			while ((ch = browserIn.read()) != -1) {
+				content.append((char) ch);
+			}
+
+			getParams(params, content.toString());
+		}
+		
+		String	user       = params.get("user");
+
+		if (user == null) {
+			return;
+		}
+
+		if (debug) {
+			System.err.println("getting role for " + user);
+		}
+
+		String	roleString = roleMap.get(user);
 
 		try {
 			byte[]	roleBytes = roleString.getBytes(encoding);
@@ -154,29 +200,26 @@ RoleThread
 		}
 	}
 
-	private String
-	getRole()
+	private void
+	getParams(
+		HashMap<String, String>	params,
+		String					args)
 	{
-		Set<String> 		userSet      = roleMap.keySet();
-		Iterator<String>	userIterator = userSet.iterator();
+		String[]				nvps = args.split("&");
 
-		// just return the first one for now
+		for (int arg = 0; arg < nvps.length; ++arg) {
+			String[]	nvp = nvps[arg].split("=");
 
-		if (userIterator.hasNext()) {
-			String user = userIterator.next();
-
-			if (debug) {
-				System.out.println("returning roles for user " + user);
+			if (nvp.length != 2) {
+				continue;
 			}
 
-			return(roleMap.get(user));
-		}
+			if (debug) {
+				System.err.println(nvp[0] + " = " + nvp[1]);
+			}
 
-		if (debug) {
-			System.out.println("no users found, returning blank roles");
+			params.put(nvp[0], nvp[1]);
 		}
-
-		return("");
 	}
 
 	// get a Reader for a Socket

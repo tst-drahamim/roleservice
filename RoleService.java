@@ -65,22 +65,34 @@ RoleService
 			}
 
 			String			roleString = properties.getProperty(user);
-			String[]		roles      = roleString.split(",");
-			StringBuffer	json       = new StringBuffer(
-										"{\"count\":" + roles.length +
-										",\"data\":[");
 
-			for (int role = 0; role < roles.length; ++role) {
-				json.append("{\"title\":\"" + roles[role] + "\"}");
-				if (role != (roles.length - 1)) {
-					json.append(",");
-				}
-			}
-
-			json.append("]}");
-
-			roleMap.put(user, json.toString());
+			roleMap.put(user, mkJson(roleString));
 		}
+	}
+
+	private String
+	mkJson(
+		String	roleString)
+	{
+		if (roleString.length() == 0) {
+			return("{\"count\":0,\"data\":[]}");
+		}
+
+		String[]		roles      = roleString.split(",");
+		StringBuffer	json       = new StringBuffer(
+									"{\"count\":" + roles.length +
+									",\"data\":[");
+
+		for (int role = 0; role < roles.length; ++role) {
+			json.append("{\"title\":\"" + roles[role] + "\"}");
+			if (role != (roles.length - 1)) {
+				json.append(",");
+			}
+		}
+
+		json.append("]}");
+
+		return(json.toString());
 	}
 
 	private boolean
